@@ -13,12 +13,18 @@ import ru.yandex.clickhouse.settings.ClickHouseProperties;
 
 import java.io.ByteArrayInputStream;
 import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.util.Collections;
+
+import static org.testng.Assert.assertEquals;
 
 public class ClickHouseStatementImplTest {
     private ClickHouseDataSource dataSource;
@@ -205,7 +211,6 @@ public class ClickHouseStatementImplTest {
         stmt.close();
     }
 
-
     @Test
     public void testSelectQueryWithComment() throws SQLException {
         Statement stmt = connection.createStatement();
@@ -216,6 +221,41 @@ public class ClickHouseStatementImplTest {
         rs.next();
         Assert.assertEquals(rs.getInt(1), 1);
         Assert.assertFalse(stmt.getMoreResults());
+    }
+
+    @Test
+    public void testSelectQueryMetadataType() throws Exception {
+        Connection connection = dataSource.getConnection();
+        connection.createStatement().execute("CREATE DATABASE IF NOT EXISTS test");
+
+        connection.createStatement().execute("DROP TABLE IF EXISTS test.type_test");
+        connection.createStatement().execute(
+                "CREATE TABLE IF NOT EXISTS test.type_test (i Int32, l Int64, s String, d Float64, bd Nullable(Decimal128(13))) ENGINE = TinyLog"
+        );
+        PreparedStatement statement = connection.prepareStatement("INSERT INTO test.type_test (i, l, s, d, bd) VALUES (?, ?, ?, ?, ?)");
+        BigDecimal bd = new BigDecimal("1234567890.123456789");
+        statement.setInt(1, 42);
+        statement.setLong(2, 4242L);
+        statement.setString(3, "asd");
+        statement.setDouble(4, 1.0D);
+        statement.setBigDecimal(5, bd);
+        statement.execute();
+
+
+        ResultSet rs = connection.createStatement().executeQuery("SELECT * from test.type_test");
+        ResultSetMetaData md = rs.getMetaData();
+        assertEquals(md.getColumnType(1), Types.INTEGER);
+        assertEquals(md.getColumnType(2), Types.BIGINT);
+        assertEquals(md.getColumnType(3), Types.VARCHAR);
+        assertEquals(md.getColumnType(4), Types.DOUBLE);
+        assertEquals(md.getColumnType(5), Types.DECIMAL);
+        rs.next();
+
+        assertEquals(rs.getString("s"), "asd");
+        assertEquals(rs.getInt("i"), 42);
+        assertEquals(rs.getLong("l"), 4242);
+        assertEquals(rs.getDouble("d"), 1.0D);
+        assertEquals(rs.getBigDecimal("bd"), bd);
     }
 
 }

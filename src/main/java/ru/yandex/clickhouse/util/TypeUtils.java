@@ -26,6 +26,7 @@ public class TypeUtils {
         if ("String".equals(clickshouseType)) return Types.VARCHAR;
         if (clickshouseType.startsWith("Float32")) return Types.FLOAT;
         if (clickshouseType.startsWith("Float64")) return Types.DOUBLE;
+        if (clickshouseType.startsWith("Decimal")) return Types.DECIMAL;
         if ("Date".equals(clickshouseType)) return Types.DATE;
         if ("DateTime".equals(clickshouseType)) return Types.TIMESTAMP;
         if ("FixedString".equals(clickshouseType)) return Types.BLOB;
