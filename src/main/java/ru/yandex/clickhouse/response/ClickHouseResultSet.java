@@ -587,7 +587,7 @@ public class ClickHouseResultSet extends AbstractResultSet {
         if (string == null) {
             return null;
         }
-        return new BigDecimal(string);
+        return new BigDecimal(string).stripTrailingZeros();
     }
 
 
@@ -608,7 +608,7 @@ public class ClickHouseResultSet extends AbstractResultSet {
             return null;
         }
         BigDecimal result = new BigDecimal(string);
-        return result.setScale(scale, RoundingMode.HALF_UP);
+        return result.setScale(scale, RoundingMode.HALF_UP).stripTrailingZeros();
     }
 
     @Override

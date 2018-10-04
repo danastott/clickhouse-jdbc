@@ -8,6 +8,7 @@ import ru.yandex.clickhouse.ClickHouseConnection;
 import ru.yandex.clickhouse.ClickHouseDataSource;
 import ru.yandex.clickhouse.ClickHouseExternalData;
 import ru.yandex.clickhouse.ClickHouseStatement;
+import ru.yandex.clickhouse.LocalSettings;
 import ru.yandex.clickhouse.settings.ClickHouseProperties;
 
 import java.io.ByteArrayInputStream;
@@ -26,7 +27,7 @@ public class ClickHouseStatementImplTest {
     @BeforeTest
     public void setUp() throws Exception {
         ClickHouseProperties properties = new ClickHouseProperties();
-        dataSource = new ClickHouseDataSource("jdbc:clickhouse://localhost:8123", properties);
+        dataSource = new ClickHouseDataSource("jdbc:clickhouse://" + LocalSettings.getHost() + ":" + LocalSettings.getPort(), properties);
         connection = (ClickHouseConnection) dataSource.getConnection();
     }
 
@@ -134,7 +135,7 @@ public class ClickHouseStatementImplTest {
     public void testResultSetWithExtremes() throws SQLException {
         ClickHouseProperties properties = new ClickHouseProperties();
         properties.setExtremes(true);
-        ClickHouseDataSource dataSource = new ClickHouseDataSource("jdbc:clickhouse://localhost:8123", properties);
+        ClickHouseDataSource dataSource = new ClickHouseDataSource("jdbc:clickhouse://" + LocalSettings.getHost() + ":" + LocalSettings.getPort(), properties);
         Connection connection = dataSource.getConnection();
 
         try {
@@ -203,4 +204,18 @@ public class ClickHouseStatementImplTest {
         rs.close();
         stmt.close();
     }
+
+
+    @Test
+    public void testSelectQueryWithComment() throws SQLException {
+        Statement stmt = connection.createStatement();
+
+        Assert.assertTrue(stmt.execute("/* comment here */ select /* another comment */ 1/*and another*/"));
+        ResultSet rs = stmt.getResultSet();
+        Assert.assertNotNull(rs);
+        rs.next();
+        Assert.assertEquals(rs.getInt(1), 1);
+        Assert.assertFalse(stmt.getMoreResults());
+    }
+
 }

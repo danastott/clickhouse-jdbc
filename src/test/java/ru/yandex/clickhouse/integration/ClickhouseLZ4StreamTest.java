@@ -4,6 +4,7 @@ import org.testng.Assert;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 import ru.yandex.clickhouse.ClickHouseDataSource;
+import ru.yandex.clickhouse.LocalSettings;
 import ru.yandex.clickhouse.settings.ClickHouseProperties;
 
 import java.sql.Connection;
@@ -19,7 +20,7 @@ public class ClickhouseLZ4StreamTest {
     public void setUp() throws Exception {
         ClickHouseProperties properties = new ClickHouseProperties();
         properties.setDecompress(true);
-        dataSource = new ClickHouseDataSource("jdbc:clickhouse://localhost:8123", properties);
+        dataSource = new ClickHouseDataSource("jdbc:clickhouse://" + LocalSettings.getHost() + ":" + LocalSettings.getPort(), properties);
         connection = dataSource.getConnection();
         connection.createStatement().execute("CREATE DATABASE IF NOT EXISTS test");
     }

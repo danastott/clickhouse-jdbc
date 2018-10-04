@@ -3,6 +3,7 @@ package ru.yandex.clickhouse.settings;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 import ru.yandex.clickhouse.ClickHouseDataSource;
+import ru.yandex.clickhouse.LocalSettings;
 
 import java.net.URI;
 import java.util.Properties;
@@ -37,7 +38,7 @@ public class ClickHousePropertiesTest {
         properties.setCompress( isCompress );
 
         ClickHouseDataSource clickHouseDataSource = new ClickHouseDataSource(
-                "jdbc:clickhouse://localhost:8123/test",
+                "jdbc:clickhouse://" + LocalSettings.getHost() + ":" + LocalSettings.getPort() + "/test",
                 properties
         );
         Assert.assertEquals(
@@ -77,7 +78,7 @@ public class ClickHousePropertiesTest {
         final Properties driverProperties = new Properties();
         driverProperties.setProperty("max_memory_usage", "42");
 
-        ClickHouseDataSource ds = new ClickHouseDataSource("jdbc:clickhouse://localhost:8123/test", driverProperties);
+        ClickHouseDataSource ds = new ClickHouseDataSource("jdbc:clickhouse://" + LocalSettings.getHost() + ":" + LocalSettings.getPort() + "/test", driverProperties);
         Assert.assertEquals(ds.getProperties().getMaxMemoryUsage(), Long.valueOf(42L), "max_memory_usage is missing");
     }
 }

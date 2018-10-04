@@ -50,8 +50,8 @@ public class BalancedClickhouseDataSourceTest {
     @BeforeTest
     public void setUp() throws Exception {
         ClickHouseProperties properties = new ClickHouseProperties();
-        dataSource = new BalancedClickhouseDataSource("jdbc:clickhouse://localhost:8123", properties);
-        doubleDataSource = new BalancedClickhouseDataSource("jdbc:clickhouse://localhost:8123,localhost:8123", properties);
+        dataSource = new BalancedClickhouseDataSource("jdbc:clickhouse://" + LocalSettings.getHost() + ":" + LocalSettings.getPort(), properties);
+        doubleDataSource = new BalancedClickhouseDataSource("jdbc:clickhouse://" + LocalSettings.getHost() + ":" + LocalSettings.getPort() + "," + LocalSettings.getHost() + ":" + LocalSettings.getPort(), properties);
     }
 
 
@@ -139,7 +139,7 @@ public class BalancedClickhouseDataSourceTest {
 
     @Test
     public void testWorkWithEnabledUrl() throws Exception {
-        BalancedClickhouseDataSource halfDatasource = new BalancedClickhouseDataSource("jdbc:clickhouse://not.existed.url:8123,localhost:8123", new ClickHouseProperties());
+        BalancedClickhouseDataSource halfDatasource = new BalancedClickhouseDataSource("jdbc:clickhouse://not.existed.url:8123," + LocalSettings.getHost() + ":" + LocalSettings.getPort(), new ClickHouseProperties());
 
         halfDatasource.actualize();
         Connection connection = halfDatasource.getConnection();

@@ -268,7 +268,7 @@ public class ClickHouseResultSetTest {
         ByteArrayInputStream is = new ByteArrayInputStream(response.getBytes("UTF-8"));
 
         ResultSet rs = new ClickHouseResultSet(is, 1024, "db", "table", false, null, null, props);
-        
+
         rs.next();
         assertFalse(rs.isLast());
         rs.next();

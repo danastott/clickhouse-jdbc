@@ -114,6 +114,7 @@ public class ClickHouseStatementImpl implements ClickHouseStatement {
         InputStream is = getInputStream(sql, additionalDBParams, externalData, additionalRequestParams);
 
         try {
+            sql = removeComments(sql);
             if (isSelect(sql)) {
                 currentUpdateCount = -1;
                 currentResult = new ClickHouseResultSet(properties.isCompress()
@@ -136,6 +137,10 @@ public class ClickHouseStatementImpl implements ClickHouseStatement {
             StreamUtils.close(is);
             throw ClickHouseExceptionSpecifier.specify(e, properties.getHost(), properties.getPort());
         }
+    }
+
+    private static String removeComments(String sql) {
+        return sql.replaceAll("/\\*.*?\\*/","");
     }
 
     public ClickHouseResponse executeQueryClickhouseResponse(String sql) throws SQLException {
@@ -184,7 +189,7 @@ public class ClickHouseStatementImpl implements ClickHouseStatement {
     public boolean execute(String sql) throws SQLException {
         // currentResult is stored here. InputString and currentResult will be closed on this.close()
         executeQuery(sql);
-        return isSelect(sql);
+        return isSelect(removeComments(sql));
     }
 
     @Override
@@ -405,7 +410,7 @@ public class ClickHouseStatementImpl implements ClickHouseStatement {
      * adds format only to select queries
      */
     private static String addFormatIfAbsent(String sql, String format) {
-        sql = sql.trim();
+        sql = removeComments(sql.trim());
         String woSemicolon = Patterns.SEMICOLON.matcher(sql).replaceAll("").trim();
         if (isSelect(sql)
             && !woSemicolon.endsWith(" TabSeparatedWithNamesAndTypes")
