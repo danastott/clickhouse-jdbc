@@ -75,7 +75,7 @@ public class ClickHouseResultSetMetaData implements ResultSetMetaData {
 
     @Override
     public int getScale(int column) throws SQLException {
-        return 0;
+        return TypeUtils.toSqlTypeScale(getColumnTypeName(column));
     }
 
     @Override

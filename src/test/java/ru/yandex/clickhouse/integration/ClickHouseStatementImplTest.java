@@ -249,6 +249,7 @@ public class ClickHouseStatementImplTest {
         assertEquals(md.getColumnType(3), Types.VARCHAR);
         assertEquals(md.getColumnType(4), Types.DOUBLE);
         assertEquals(md.getColumnType(5), Types.DECIMAL);
+        assertEquals(md.getScale(5), 13);
         rs.next();
 
         assertEquals(rs.getString("s"), "asd");

@@ -37,6 +37,26 @@ public class TypeUtils {
         return Types.VARCHAR;
     }
 
+    public static int toSqlTypeScale(String clickshouseType) {
+        if (isNullable(clickshouseType)) {
+            clickshouseType = unwrapNullable(clickshouseType);
+        }
+        if (clickshouseType.startsWith("Decimal")) {
+            int pos = clickshouseType.indexOf("(");
+            if (pos != -1) {
+                String percisionScale = clickshouseType.substring(pos+1, clickshouseType.indexOf(")"));
+                String[] params = percisionScale.split(",");
+                if (params.length > 1) {
+                    return Integer.parseInt(params[1].trim());
+                } else {
+                    return Integer.parseInt(params[0].trim());
+                }
+            }
+        }
+
+        return 0;
+    }
+
     private static String unwrapNullable(String clickshouseType) {
         return clickshouseType.substring("Nullable(".length(), clickshouseType.length() - 1);
     }
