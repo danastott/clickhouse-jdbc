@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import ru.yandex.clickhouse.response.ClickHouseResponse;
 import ru.yandex.clickhouse.settings.ClickHouseProperties;
 import ru.yandex.clickhouse.settings.ClickHouseQueryParam;
+import ru.yandex.clickhouse.util.ByteBufferOutputStream;
 import ru.yandex.clickhouse.util.ClickHouseArrayUtil;
 import ru.yandex.clickhouse.util.guava.StreamUtils;
 
@@ -18,6 +19,7 @@ import java.io.Reader;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.sql.*;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
@@ -29,18 +31,26 @@ import java.util.regex.Pattern;
 public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl implements ClickHousePreparedStatement {
     private static final Logger log = LoggerFactory.getLogger(ClickHouseStatementImpl.class);
     private static final Pattern VALUES = Pattern.compile("(?i)VALUES[\\s]*\\(");
+    private static final byte[] declaredNullBytes = "\\N".getBytes();
+    private static final byte[] nullBytes = "null".getBytes();
+    private static final byte[] zeroBytes = "0".getBytes();
+    private static final byte[] oneBytes = "1".getBytes();
+    private static final byte[] tabBytes = "\t".getBytes();
+    private static final byte[] newLineBytes = "\n".getBytes();
+    private static final byte[] singleQuoteBytes = "'".getBytes();
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private final ByteBufferOutputStream byteBuffer = new ByteBufferOutputStream(ByteBuffer.allocate(1024), true);
 
     private final String sql;
     private final List<String> sqlParts;
-    private String[] binds;
+    private byte[][] binds;
     private boolean[] valuesQuote;
     private List<byte[]> batchRows = new ArrayList<byte[]>();
 
     public ClickHousePreparedStatementImpl(CloseableHttpClient client, ClickHouseConnection connection,
-             ClickHouseProperties properties, String sql, TimeZone timezone) throws SQLException {
+                                           ClickHouseProperties properties, String sql, TimeZone timezone) throws SQLException {
         super(client, connection, properties);
         this.sql = sql;
         this.sqlParts = parseSql(sql);
@@ -49,7 +59,7 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
     }
 
     private void createBinds() {
-        this.binds = new String[this.sqlParts.size() - 1];
+        this.binds = new byte[this.sqlParts.size() - 1][];
         this.valuesQuote = new boolean[this.sqlParts.size() - 1];
     }
 
@@ -129,30 +139,35 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
             return sqlParts.get(0);
         }
         checkBinded(binds);
+        try {
+            byteBuffer.reset();
+            byteBuffer.write(sqlParts.get(0).getBytes(StreamUtils.UTF_8));
+            for (int i = 1; i < sqlParts.size(); i++) {
+                appendBoundValue(i - 1);
+                byteBuffer.write(sqlParts.get(i).getBytes());
+            }
 
-        StringBuilder sb = new StringBuilder(sqlParts.get(0));
-        for (int i = 1; i < sqlParts.size(); i++) {
-            appendBoundValue(sb, i - 1);
-            sb.append(sqlParts.get(i));
+            return new String(byteBuffer.toByteArray(), StreamUtils.UTF_8);
+        } catch (IOException ioe) {
+            throw new SQLException("Unable to process batch", ioe);
         }
-        String sql = sb.toString();
-
-        return sql;
     }
 
-    private void appendBoundValue(StringBuilder sb, int num) {
+    private void appendBoundValue(int num) throws IOException {
         if (valuesQuote[num]) {
-            sb.append("'").append(binds[num]).append("'");
-        } else if (binds[num].equals("\\N")) {
-            sb.append("null");
+            byteBuffer.write(singleQuoteBytes);
+            byteBuffer.write(binds[num]);
+            byteBuffer.write(singleQuoteBytes);
+        } else if (Arrays.equals(binds[num], declaredNullBytes)) {
+            byteBuffer.write(nullBytes);
         } else {
-            sb.append(binds[num]);
+            byteBuffer.write(binds[num]);
         }
     }
 
-    private static void checkBinded(String[] binds) throws SQLException {
+    private static void checkBinded(byte[][] binds) throws SQLException {
         int i = 0;
-        for (String b : binds) {
+        for (byte[] b : binds) {
             ++i;
             if (b == null) {
                 throw new SQLException("Not all parameters binded (placeholder " + i + " is undefined)");
@@ -162,12 +177,12 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     private byte[] buildBinds() throws SQLException {
         checkBinded(binds);
-        StringBuilder sb = new StringBuilder();
+        byteBuffer.reset();
         for (int i = 0; i < binds.length; i++) {
-            sb.append(binds[i]);
-            sb.append(i < binds.length - 1 ? '\t' : '\n');
+            byteBuffer.write(binds[i]);
+            byteBuffer.write((i < binds.length - 1 ? tabBytes : newLineBytes));
         }
-        return sb.toString().getBytes(StreamUtils.UTF_8);
+        return byteBuffer.toByteArray();
     }
 
     @Override
@@ -190,11 +205,11 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
         return super.executeUpdate(buildSql());
     }
 
-    private void setBind(int parameterIndex, String bind) {
+    private void setBind(int parameterIndex, byte[] bind) {
         setBind(parameterIndex, bind, false);
     }
 
-    private void setBind(int parameterIndex, String bind, boolean quote) {
+    private void setBind(int parameterIndex, byte[] bind, boolean quote) {
         binds[parameterIndex - 1] = bind;
         valuesQuote[parameterIndex - 1] = quote;
     }
@@ -202,62 +217,62 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     @Override
     public void setNull(int parameterIndex, int sqlType) throws SQLException {
-        setBind(parameterIndex, "\\N");
+        setBind(parameterIndex, declaredNullBytes);
     }
 
     @Override
     public void setBoolean(int parameterIndex, boolean x) throws SQLException {
-        setBind(parameterIndex, x ? "1" : "0");
+        setBind(parameterIndex, x ? oneBytes : zeroBytes);
     }
 
     @Override
     public void setByte(int parameterIndex, byte x) throws SQLException {
-        setBind(parameterIndex, Byte.toString(x));
+        setBind(parameterIndex, new byte[]{x});
     }
 
     @Override
     public void setShort(int parameterIndex, short x) throws SQLException {
-        setBind(parameterIndex, Short.toString(x));
+        setBind(parameterIndex, String.valueOf(x).getBytes());
     }
 
     @Override
     public void setInt(int parameterIndex, int x) throws SQLException {
-        setBind(parameterIndex, Integer.toString(x));
+        setBind(parameterIndex, String.valueOf(x).getBytes());
     }
 
     @Override
     public void setLong(int parameterIndex, long x) throws SQLException {
-        setBind(parameterIndex, Long.toString(x));
+        setBind(parameterIndex, String.valueOf(x).getBytes());
     }
 
     @Override
     public void setFloat(int parameterIndex, float x) throws SQLException {
-        setBind(parameterIndex, Float.toString(x));
+        setBind(parameterIndex, String.valueOf(x).getBytes());
     }
 
     @Override
     public void setDouble(int parameterIndex, double x) throws SQLException {
-        setBind(parameterIndex, Double.toString(x));
+        setBind(parameterIndex, String.valueOf(x).getBytes());
     }
 
     @Override
     public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
-        setBind(parameterIndex, x.toPlainString());
+        setBind(parameterIndex, x == null ? declaredNullBytes : x.toPlainString().getBytes());
     }
 
     @Override
     public void setString(int parameterIndex, String x) throws SQLException {
-        setBind(parameterIndex, ClickHouseUtil.escape(x), x != null);
+        setBind(parameterIndex, x == null ? declaredNullBytes : ClickHouseUtil.escape(x).getBytes(StreamUtils.UTF_8), x != null);
     }
 
     @Override
     public void setBytes(int parameterIndex, byte[] x) throws SQLException {
-        setBind(parameterIndex, new String(x, StreamUtils.UTF_8));
+        setBind(parameterIndex, x == null ? declaredNullBytes : x, true);
     }
 
     @Override
     public void setDate(int parameterIndex, Date x) throws SQLException {
-        setBind(parameterIndex, dateFormat.format(x), true);
+        setBind(parameterIndex, x == null ? declaredNullBytes : dateFormat.format(x).getBytes(StreamUtils.UTF_8), true);
     }
 
     @Override
@@ -268,7 +283,7 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     @Override
     public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
-        setBind(parameterIndex, dateTimeFormat.format(x), true);
+        setBind(parameterIndex, x == null ? declaredNullBytes : dateTimeFormat.format(x).getBytes(StreamUtils.UTF_8), true);
     }
 
     @Override
@@ -292,17 +307,17 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     @Override
     public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
-        setObject(parameterIndex, x);
+        setObject(parameterIndex, x == null ? declaredNullBytes : x);
     }
 
     @Override
     public void setArray(int parameterIndex, Collection collection) throws SQLException {
-        setBind(parameterIndex, ClickHouseArrayUtil.toString(collection));
+        setBind(parameterIndex, ClickHouseArrayUtil.toString(collection).getBytes(StreamUtils.UTF_8));
     }
 
     @Override
     public void setArray(int parameterIndex, Object[] array) throws SQLException {
-        setBind(parameterIndex, ClickHouseArrayUtil.toString(array));
+        setBind(parameterIndex, ClickHouseArrayUtil.toString(array).getBytes(StreamUtils.UTF_8));
     }
 
     @Override
@@ -343,7 +358,7 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
             } else if (x instanceof Clob) {
                 setClob(parameterIndex, (Clob) x);
             } else if (x instanceof BigInteger) {
-                setBind(parameterIndex, x.toString());
+                setBind(parameterIndex, x.toString().getBytes(StreamUtils.UTF_8));
             } else if (x instanceof UUID) {
                 setString(parameterIndex, x.toString());
             } else if (x instanceof Collection) {
@@ -364,8 +379,9 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     @Override
     public void addBatch() throws SQLException {
-        batchRows.add(buildBinds());
-        createBinds();
+        byte[] binds = buildBinds();
+        batchRows.add(binds);
+        clearParameters();
     }
 
     @Override
@@ -455,7 +471,7 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     @Override
     public void setArray(int parameterIndex, Array x) throws SQLException {
-        setBind(parameterIndex, ClickHouseArrayUtil.arrayToString(x.getArray()));
+        setBind(parameterIndex, ClickHouseArrayUtil.arrayToString(x.getArray()).getBytes(StreamUtils.UTF_8));
     }
 
     @Override

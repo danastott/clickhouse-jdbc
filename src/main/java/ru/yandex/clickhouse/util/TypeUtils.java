@@ -23,15 +23,15 @@ public class TypeUtils {
         if (clickshouseType.startsWith("Int") || clickshouseType.startsWith("UInt")) {
             return clickshouseType.endsWith("64") ? Types.BIGINT : Types.INTEGER;
         }
-        if ("String".equals(clickshouseType)) return Types.VARCHAR;
+        if (clickshouseType.startsWith("String")) return Types.VARCHAR;
         if (clickshouseType.startsWith("Float32")) return Types.FLOAT;
         if (clickshouseType.startsWith("Float64")) return Types.DOUBLE;
         if (clickshouseType.startsWith("Decimal")) return Types.DECIMAL;
-        if ("Date".equals(clickshouseType)) return Types.DATE;
-        if ("DateTime".equals(clickshouseType)) return Types.TIMESTAMP;
-        if ("FixedString".equals(clickshouseType)) return Types.BLOB;
+        if (clickshouseType.startsWith("DateTime")) return Types.TIMESTAMP;
+        if (clickshouseType.startsWith("Date")) return Types.DATE;
+        if (clickshouseType.startsWith("FixedString")) return Types.BLOB;
         if (isArray(clickshouseType)) return Types.ARRAY;
-        if ("UUID".equals(clickshouseType)) return Types.OTHER;
+        if (clickshouseType.startsWith("UUID")) return Types.OTHER;
 
         // don't know what to return actually
         return Types.VARCHAR;

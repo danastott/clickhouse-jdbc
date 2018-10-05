@@ -16,11 +16,13 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Collections;
 
@@ -230,15 +232,20 @@ public class ClickHouseStatementImplTest {
 
         connection.createStatement().execute("DROP TABLE IF EXISTS test.type_test");
         connection.createStatement().execute(
-                "CREATE TABLE IF NOT EXISTS test.type_test (i Int32, l Int64, s String, d Float64, bd Nullable(Decimal128(13))) ENGINE = TinyLog"
+                "CREATE TABLE IF NOT EXISTS test.type_test (i Int32, l Int64, s String, f Float64, bd Nullable(Decimal128(13)), d Date, dt DateTime, b String) ENGINE = TinyLog"
         );
-        PreparedStatement statement = connection.prepareStatement("INSERT INTO test.type_test (i, l, s, d, bd) VALUES (?, ?, ?, ?, ?)");
-        BigDecimal bd = new BigDecimal("1234567890.123456789");
+        PreparedStatement statement = connection.prepareStatement("INSERT INTO test.type_test (i, l, s, f, bd, d, dt, b) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        final BigDecimal bd = new BigDecimal("1234567890.123456789");
+        final Date date = new Date(1483330102000L); //2017-01-01 12:21:42 GMT
+        final Timestamp ts = new Timestamp(date.getTime());
         statement.setInt(1, 42);
         statement.setLong(2, 4242L);
         statement.setString(3, "asd");
         statement.setDouble(4, 1.0D);
         statement.setBigDecimal(5, bd);
+        statement.setDate(6, date);
+        statement.setTimestamp(7, ts);
+        statement.setBytes(8, "abc".getBytes());
         statement.execute();
 
 
@@ -249,14 +256,24 @@ public class ClickHouseStatementImplTest {
         assertEquals(md.getColumnType(3), Types.VARCHAR);
         assertEquals(md.getColumnType(4), Types.DOUBLE);
         assertEquals(md.getColumnType(5), Types.DECIMAL);
+        assertEquals(md.getColumnType(6), Types.DATE);
+        assertEquals(md.getColumnType(7), Types.TIMESTAMP);
+        assertEquals(md.getColumnType(8), Types.VARCHAR);
         assertEquals(md.getScale(5), 13);
         rs.next();
 
         assertEquals(rs.getString("s"), "asd");
         assertEquals(rs.getInt("i"), 42);
         assertEquals(rs.getLong("l"), 4242);
-        assertEquals(rs.getDouble("d"), 1.0D);
+        assertEquals(rs.getDouble("f"), 1.0D);
         assertEquals(rs.getBigDecimal("bd"), bd);
-    }
+        assertEquals(rs.getDate("d"), date);
+        assertEquals(rs.getTimestamp("dt"), ts);
+        assertEquals(rs.getString("b"), "abc");
 
+        rs = connection.createStatement().executeQuery("SELECT toDateTime(addHours(toDateTime(dt), 7, 'UTC')) from test.type_test");
+        md = rs.getMetaData();
+        assertEquals(md.getColumnType(1), Types.TIMESTAMP);
+
+    }
 }
