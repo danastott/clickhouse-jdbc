@@ -5,6 +5,7 @@ import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 import ru.yandex.clickhouse.ClickHouseDataSource;
 import ru.yandex.clickhouse.ClickHousePreparedStatement;
+import ru.yandex.clickhouse.ClickHousePreparedStatementImpl;
 import ru.yandex.clickhouse.LocalSettings;
 import ru.yandex.clickhouse.settings.ClickHouseProperties;
 import ru.yandex.clickhouse.settings.ClickHouseQueryParam;
@@ -171,6 +172,45 @@ public class BatchInserts {
         Assert.assertEquals(rs.getDate("date"), date);
         Assert.assertNull(rs.getTimestamp("date_time"));
         Assert.assertNull(rs.getString("string"));
+        Assert.assertEquals(rs.getInt("int32"), 0);
+        Assert.assertNull(rs.getObject("int32"));
+        Assert.assertEquals(rs.getDouble("float64"), 0.0);
+        Assert.assertNull(rs.getObject("float64"));
+
+        Assert.assertFalse(rs.next());
+        connection.createStatement().execute("DROP TABLE test.batch_insert_nulls");
+    }
+
+    @Test
+     public void batchInsertEmpties() throws Exception {
+        connection.createStatement().execute("DROP TABLE IF EXISTS test.batch_insert_nulls");
+        connection.createStatement().execute(
+                        "CREATE TABLE test.batch_insert_nulls (" +
+                                        "date Date," +
+                                        "date_time Nullable(DateTime)," +
+                                        "string Nullable(String)," +
+                                        "int32 Nullable(Int32)," +
+                                        "float64 Nullable(Float64)" +
+                                        ") ENGINE = MergeTree(date, (date), 8192)"
+                        );
+
+        ClickHousePreparedStatementImpl statement = (ClickHousePreparedStatementImpl) connection.prepareStatement(
+                "INSERT INTO test.batch_insert_nulls (date, date_time, string, int32, float64) VALUES (?, ?, ?, ?, ?)"
+                );
+        Date date = new Date(602110800000L); //1989-01-30
+        statement.setDate(1, date);
+        statement.setBytes(2, "".getBytes(), 0, 0, Types.TIMESTAMP);
+        statement.setBytes(3, "".getBytes(), 0, 0, Types.VARCHAR);
+        statement.setBytes(4, "".getBytes(), 0, 0, Types.INTEGER);
+        statement.setBytes(5, "".getBytes(), 0, 0, Types.DOUBLE);
+        statement.addBatch();
+        statement.executeBatch(Collections.singletonMap(ClickHouseQueryParam.CONNECT_TIMEOUT, "1000"));
+
+        ResultSet rs = connection.createStatement().executeQuery("SELECT date, date_time, string, int32, float64 from test.batch_insert_nulls");
+        Assert.assertTrue(rs.next());
+
+        Assert.assertNull(rs.getTimestamp("date_time"));
+        Assert.assertEquals(rs.getString("string"), "");
         Assert.assertEquals(rs.getInt("int32"), 0);
         Assert.assertNull(rs.getObject("int32"));
         Assert.assertEquals(rs.getDouble("float64"), 0.0);
