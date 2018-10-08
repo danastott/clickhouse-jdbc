@@ -234,4 +234,94 @@ public class BatchInserts {
         st.addBatch();
         st.executeBatch();
     }
+
+    @Test
+    public void batchDeleteSimple() throws Exception {
+
+        connection.createStatement().execute("DROP TABLE IF EXISTS test.batch_insert");
+        connection.createStatement().execute(
+                "CREATE TABLE IF NOT EXISTS test.batch_insert (i Int32, s String) ENGINE = MergeTree partition by i order by i"
+        );
+
+        PreparedStatement statement = connection.prepareStatement("INSERT INTO test.batch_insert (s, i) VALUES (?, ?)");
+
+        statement.setString(1, "string1");
+        statement.setInt(2, 21);
+        statement.addBatch();
+
+        statement.setString(1, "string2");
+        statement.setInt(2, 32);
+        statement.addBatch();
+
+        statement.executeBatch();
+
+        PreparedStatement st = connection.prepareStatement("ALTER TABLE test.batch_insert DELETE WHERE i = ?");
+        st.setInt(1, 21);
+        st.addBatch();
+        st.setInt(1, 32);
+        st.addBatch();
+
+        st.executeBatch();
+
+        int count = 1;
+        for (int i = 0 ; i < 50 ; i++) {
+            st = connection.prepareStatement("select count(1) from test.batch_insert");
+            ResultSet rs = st.executeQuery();
+            Assert.assertTrue(rs.next());
+            if (rs.getInt(1) == 0) {
+                count = 0;
+                break;
+            }
+            // eventually consistent so we'll wait for a while
+            Thread.sleep(100);
+        }
+        Assert.assertEquals(count, 0);
+
+    }
+
+    @Test
+    public void batchDeleteMultiplePredicates() throws Exception {
+
+        connection.createStatement().execute("DROP TABLE IF EXISTS test.batch_insert");
+        connection.createStatement().execute(
+                "CREATE TABLE IF NOT EXISTS test.batch_insert (i Int32, s String) ENGINE = MergeTree partition by i order by i"
+        );
+
+        PreparedStatement statement = connection.prepareStatement("INSERT INTO test.batch_insert (s, i) VALUES (?, ?)");
+
+        statement.setString(1, "string1");
+        statement.setInt(2, 21);
+        statement.addBatch();
+
+        statement.setString(1, "string2");
+        statement.setInt(2, 32);
+        statement.addBatch();
+
+        statement.executeBatch();
+
+        PreparedStatement st = connection.prepareStatement("ALTER TABLE test.batch_insert DELETE WHERE i = ? and s = ?");
+        st.setInt(1, 21);
+        st.setString(2, "string1");
+        st.addBatch();
+        st.setInt(1, 32);
+        st.setString(2, "string2");
+        st.addBatch();
+
+        st.executeBatch();
+
+        int count = 1;
+        for (int i = 0 ; i < 50 ; i++) {
+            st = connection.prepareStatement("select count(1) from test.batch_insert");
+            ResultSet rs = st.executeQuery();
+            Assert.assertTrue(rs.next());
+            if (rs.getInt(1) == 0) {
+                count = 0;
+                break;
+            }
+            // eventually consistent so we'll wait for a while
+            Thread.sleep(100);
+        }
+        Assert.assertEquals(count, 0);
+
+    }
 }

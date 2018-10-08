@@ -57,15 +57,15 @@ public class ByteBufferOutputStream extends OutputStream {
     }
 
     @Override
-    public void write(final int bty) {
+    public void write(final int b) {
 
         try {
-            wrappedBuffer.put((byte) bty);
+            wrappedBuffer.put((byte) b);
         } catch (final BufferOverflowException ex) {
             if (autoEnlarge) {
                 final int newBufferSize = wrappedBuffer.capacity() * 2;
                 growTo(newBufferSize);
-                write(bty);
+                write(b);
             } else {
                 throw ex;
             }

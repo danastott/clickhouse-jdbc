@@ -277,36 +277,4 @@ public class ClickHouseStatementImplTest {
 
     }
 
-    @Test (enabled = true)
-    public void performance() throws Exception {
-        Connection connection = dataSource.getConnection();
-        connection.createStatement().execute("CREATE DATABASE IF NOT EXISTS test");
-
-        connection.createStatement().execute("DROP TABLE IF EXISTS test.type_test");
-        connection.createStatement().execute(
-                "CREATE TABLE IF NOT EXISTS test.type_test (i Int32, l Int64, s String, f Float64, bd Nullable(Decimal128(13)), d Date, dt DateTime, b String) ENGINE = TinyLog"
-        );
-        PreparedStatement statement = connection.prepareStatement("INSERT INTO test.type_test (i, l, s, f, bd, d, dt, b) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        long startTime = System.currentTimeMillis();
-        for (int i = 0 ; i < 100000001 ; i++) {
-            final BigDecimal bd = new BigDecimal("1234567890.123456789");
-            final Date date = new Date(1483330102000L + (i * 60000)); //2017-01-01 12:21:42 GMT
-            final Timestamp ts = new Timestamp(date.getTime());
-            statement.setInt(1, 42 + i);
-            statement.setLong(2, i + 4242L);
-            statement.setString(3, "asd");
-            statement.setDouble(4, 1 + 1.0D);
-            statement.setBigDecimal(5, bd);
-            statement.setDate(6, date);
-            statement.setTimestamp(7, ts);
-            statement.setBytes(8, ("abc" + i).getBytes());
-            statement.addBatch();
-            if (i % 10000 == 0) {
-                statement.executeBatch();
-            }
-        }
-        statement.executeBatch();
-        System.out.println((System.currentTimeMillis() - startTime) + " ms");
-    }
-
 }

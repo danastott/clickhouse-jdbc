@@ -413,7 +413,37 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     @Override
     public int[] executeBatch() throws SQLException {
-        return executeBatch(null);
+        Matcher matcher = VALUES.matcher(sql);
+        if (!matcher.find()) {
+            binds = new ByteArray[1];
+            int[] result = new int[batchRows.size()];
+            int i = 0;
+            boolean[] valuesQuoteCopy = new boolean[valuesQuote.length];
+            System.arraycopy(valuesQuote, 0, valuesQuoteCopy, 0, valuesQuote.length);
+            for (byte[] batchRow : batchRows) {
+                byteBuffer.reset();
+                System.arraycopy(valuesQuoteCopy, 0, valuesQuote, 0, valuesQuoteCopy.length);
+                List<ByteArray> batchValues = new ArrayList<ByteArray>();
+                for (byte b : batchRow) {
+                    if (b == '\t' || b == '\n') {
+                        batchValues.add(new ByteArray(byteBuffer.toByteArray()));
+                        byteBuffer.reset();
+                    } else {
+                        byteBuffer.write(b);
+                    }
+                }
+                binds = new ByteArray[batchValues.size()];
+                int b = 0;
+                for (ByteArray batchValue : batchValues) {
+                    binds[b++] = batchValue;
+                }
+                result[i++] = executeUpdate();
+            }
+            batchRows.clear();
+            return result;
+        } else {
+            return executeBatch(null);
+        }
     }
 
     @Override
