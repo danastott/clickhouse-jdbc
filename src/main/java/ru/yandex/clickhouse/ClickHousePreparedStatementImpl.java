@@ -175,6 +175,16 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
         valuesQuote[num] = false;
     }
 
+    private static boolean isDeclaredNullBytes(String x) {
+        return "\\N".equals(x);
+    }
+
+    private static boolean isDeclaredNullBytes(byte[] bytes) {
+        return bytes.length == declaredNullBytes.length &&
+                bytes[0] == declaredNullBytes.bytes[0] &&
+                bytes[1] == declaredNullBytes.bytes[1];
+    }
+
     private static void checkBinded(ByteArray[] binds) throws SQLException {
         int i = 0;
         for (ByteArray b : binds) {
@@ -221,6 +231,9 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
     }
 
     private void setBind(int parameterIndex, byte[] x, boolean quote) {
+        if (x == null || isDeclaredNullBytes(x)) {
+            x = declaredNullBytes.bytes;
+        }
         binds[parameterIndex - 1].write(x);
         valuesQuote[parameterIndex - 1] = quote;
     }
@@ -282,16 +295,16 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
 
     @Override
     public void setString(int parameterIndex, String x) throws SQLException {
-        setBind(parameterIndex, x == null ? declaredNullBytes.bytes : ClickHouseUtil.escape(x).getBytes(StreamUtils.UTF_8), x != null);
+        setBind(parameterIndex, (x == null || isDeclaredNullBytes(x)) ? declaredNullBytes.bytes : ClickHouseUtil.escape(x).getBytes(StreamUtils.UTF_8), x != null);
     }
 
     @Override
     public void setBytes(int parameterIndex, byte[] x) throws SQLException {
-        setBind(parameterIndex, x == null ? declaredNullBytes.bytes : x, true);
+        setBind(parameterIndex, (x == null || isDeclaredNullBytes(x)) ? declaredNullBytes.bytes : x, true);
     }
 
     public void setBytes(int parameterIndex, byte[] x, int off, int length, int sqlType) throws SQLException {
-        if (x == null || (length == 0 && Types.VARCHAR != sqlType)) {
+        if ((x == null || isDeclaredNullBytes(x)) || (length == 0 && Types.VARCHAR != sqlType)) {
             setBind(parameterIndex, declaredNullBytes);
         } else {
             setBind(parameterIndex, x, off, length, Types.VARCHAR == sqlType || Types.DATE == sqlType || Types.TIMESTAMP == sqlType);
@@ -334,8 +347,8 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
     }
 
     @Override
-    public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
-        setObject(parameterIndex, x == null ? declaredNullBytes.bytes : x);
+    public void setObject(int parameterIndex, Object x) throws SQLException {
+        setObject(parameterIndex, x == null ? declaredNullBytes.bytes : x, Types.OTHER);
     }
 
     @Override
@@ -349,9 +362,57 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
     }
 
     @Override
-    public void setObject(int parameterIndex, Object x) throws SQLException {
+    public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
         if (x == null) {
             setNull(parameterIndex, Types.OTHER);
+        } else if (Types.OTHER != targetSqlType) {
+            if (targetSqlType == Types.VARCHAR ||
+                    targetSqlType == Types.NVARCHAR ||
+                    targetSqlType == Types.LONGVARCHAR ||
+                    targetSqlType == Types.LONGNVARCHAR) {
+                setString(parameterIndex, x.toString());
+            } else if ((targetSqlType == Types.INTEGER || targetSqlType == Types.SMALLINT) && x instanceof Integer) {
+                setInt(parameterIndex, (Integer) x);
+            } else if (targetSqlType == Types.BIGINT) {
+                setBind(parameterIndex, x.toString().getBytes(StreamUtils.UTF_8));
+            } else if (targetSqlType == Types.TIMESTAMP && x instanceof Timestamp) {
+                setTimestamp(parameterIndex, (Timestamp) x);
+            } else if (targetSqlType == Types.DATE && x instanceof Date) {
+                setDate(parameterIndex, (Date) x);
+            } else if (targetSqlType == Types.DOUBLE && x instanceof Double) {
+                setDouble(parameterIndex, (Double) x);
+            } else if (targetSqlType == Types.ARRAY && x instanceof Object[]) {
+                setArray(parameterIndex, (Object[]) x);
+            } else if (targetSqlType == Types.FLOAT && x instanceof Float) {
+                setFloat(parameterIndex, (Float) x);
+            } else if (targetSqlType == Types.DECIMAL && x instanceof BigDecimal) {
+                setBigDecimal(parameterIndex, (BigDecimal) x);
+            } else if (targetSqlType == Types.BLOB && x instanceof Blob) {
+                setBlob(parameterIndex, (Blob) x);
+            } else if (targetSqlType == Types.BIT && x instanceof Byte) {
+                setInt(parameterIndex, ((Byte) x).intValue());
+            } else if (targetSqlType == Types.BOOLEAN && x instanceof Boolean) {
+                setBoolean(parameterIndex, (Boolean) x);
+            } else if (targetSqlType == Types.CHAR && x instanceof Byte) {
+                setByte(parameterIndex, (Byte) x);
+            } else if (targetSqlType == Types.TIME && x instanceof Time) {
+                setTime(parameterIndex, (Time) x);
+            } else if (targetSqlType == Types.NUMERIC) {
+                setBigDecimal(parameterIndex, new BigDecimal(x.toString()));
+            } else if (targetSqlType == Types.TINYINT && x instanceof Short) {
+                setShort(parameterIndex, (Short) x);
+            } else if (targetSqlType == Types.NULL) {
+                setNull(parameterIndex, Types.NULL);
+            } else if (targetSqlType == Types.CLOB && x instanceof Clob) {
+                setClob(parameterIndex, (Clob) x);
+            } else {
+                String s = x.toString();
+                if (isDeclaredNullBytes(s) || s.length() == 0) {
+                    setNull(parameterIndex, Types.NULL);
+                } else {
+                    setString(parameterIndex, x.toString());
+                }
+            }
         } else {
             if (x instanceof Byte) {
                 setInt(parameterIndex, ((Byte) x).intValue());
@@ -360,15 +421,15 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
             } else if (x instanceof BigDecimal) {
                 setBigDecimal(parameterIndex, (BigDecimal) x);
             } else if (x instanceof Short) {
-                setShort(parameterIndex, ((Short) x).shortValue());
+                setShort(parameterIndex, (Short) x);
             } else if (x instanceof Integer) {
-                setInt(parameterIndex, ((Integer) x).intValue());
+                setInt(parameterIndex, (Integer) x);
             } else if (x instanceof Long) {
-                setLong(parameterIndex, ((Long) x).longValue());
+                setLong(parameterIndex, (Long) x);
             } else if (x instanceof Float) {
-                setFloat(parameterIndex, ((Float) x).floatValue());
+                setFloat(parameterIndex, (Float) x);
             } else if (x instanceof Double) {
-                setDouble(parameterIndex, ((Double) x).doubleValue());
+                setDouble(parameterIndex, (Double) x);
             } else if (x instanceof byte[]) {
                 setBytes(parameterIndex, (byte[]) x);
             } else if (x instanceof Date) {
@@ -378,7 +439,7 @@ public class ClickHousePreparedStatementImpl extends ClickHouseStatementImpl imp
             } else if (x instanceof Timestamp) {
                 setTimestamp(parameterIndex, (Timestamp) x);
             } else if (x instanceof Boolean) {
-                setBoolean(parameterIndex, ((Boolean) x).booleanValue());
+                setBoolean(parameterIndex, (Boolean) x);
             } else if (x instanceof InputStream) {
                 setBinaryStream(parameterIndex, (InputStream) x, -1);
             } else if (x instanceof Blob) {

@@ -140,8 +140,23 @@ public class BatchInserts {
         Assert.assertFalse(rs.next());
     }
 
+
     @Test
-     public void batchInsertNulls() throws Exception {
+    public void batchInsertNulls() throws Exception {
+        batchInsertObjectNulls(null);
+    }
+
+    @Test
+    public void batchInsertDeclaredNulls() throws Exception {
+        batchInsertObjectNulls("\\N");
+    }
+
+    @Test
+    public void batchInsertEmpties() throws Exception {
+        batchInsertObjectNulls("");
+    }
+
+    public void batchInsertObjectNulls(String nullValue) throws Exception {
         connection.createStatement().execute("DROP TABLE IF EXISTS test.batch_insert_nulls");
         connection.createStatement().execute(
                         "CREATE TABLE test.batch_insert_nulls (" +
@@ -159,10 +174,10 @@ public class BatchInserts {
 
         Date date = new Date(602110800000L); //1989-01-30
         statement.setDate(1, date);
-        statement.setObject(2, null, Types.TIMESTAMP);
-        statement.setObject(3, null, Types.VARCHAR);
-        statement.setObject(4, null, Types.INTEGER);
-        statement.setObject(5, null, Types.DOUBLE);
+        statement.setObject(2, nullValue, Types.TIMESTAMP);
+        statement.setObject(3, nullValue, Types.VARCHAR);
+        statement.setObject(4, nullValue, Types.INTEGER);
+        statement.setObject(5, nullValue, Types.DOUBLE);
         statement.addBatch();
         statement.executeBatch(Collections.singletonMap(ClickHouseQueryParam.CONNECT_TIMEOUT, "1000"));
 
@@ -182,7 +197,16 @@ public class BatchInserts {
     }
 
     @Test
-     public void batchInsertEmpties() throws Exception {
+    public void batchInsertEmptyBytes() throws Exception {
+        batchInsertBytes("");
+    }
+
+    @Test
+    public void batchInsertDeclaredEmptyBytes() throws Exception {
+        batchInsertBytes("\\N");
+    }
+
+    public void batchInsertBytes(String value) throws Exception {
         connection.createStatement().execute("DROP TABLE IF EXISTS test.batch_insert_nulls");
         connection.createStatement().execute(
                         "CREATE TABLE test.batch_insert_nulls (" +
@@ -199,10 +223,10 @@ public class BatchInserts {
                 );
         Date date = new Date(602110800000L); //1989-01-30
         statement.setDate(1, date);
-        statement.setBytes(2, "".getBytes(), 0, 0, Types.TIMESTAMP);
-        statement.setBytes(3, "".getBytes(), 0, 0, Types.VARCHAR);
-        statement.setBytes(4, "".getBytes(), 0, 0, Types.INTEGER);
-        statement.setBytes(5, "".getBytes(), 0, 0, Types.DOUBLE);
+        statement.setBytes(2, value.getBytes(), 0, 0, Types.TIMESTAMP);
+        statement.setBytes(3, value.getBytes(), 0, 0, Types.VARCHAR);
+        statement.setBytes(4, value.getBytes(), 0, 0, Types.INTEGER);
+        statement.setBytes(5, value.getBytes(), 0, 0, Types.DOUBLE);
         statement.addBatch();
         statement.executeBatch(Collections.singletonMap(ClickHouseQueryParam.CONNECT_TIMEOUT, "1000"));
 
@@ -210,7 +234,7 @@ public class BatchInserts {
         Assert.assertTrue(rs.next());
 
         Assert.assertNull(rs.getTimestamp("date_time"));
-        Assert.assertEquals(rs.getString("string"), "");
+        Assert.assertNull(rs.getString("string"));
         Assert.assertEquals(rs.getInt("int32"), 0);
         Assert.assertNull(rs.getObject("int32"));
         Assert.assertEquals(rs.getDouble("float64"), 0.0);
